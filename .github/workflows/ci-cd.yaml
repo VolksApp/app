@@ -14,7 +14,10 @@ jobs:
     - name: Build Docker
       run: docker build -t vw-backend /app
     - name: Run Tests
-      run: docker run vw-backend pytest  # Assumes tests in backend/tests/
+      run: |
+        cd app
+        pip install -r requirements.txt
+        pytest
   build-test-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -22,7 +25,9 @@ jobs:
     - name: Build Docker
       run: docker build -t vw-frontend /
     - name: Run Tests
-      run: docker run vw-frontend npm test  # Assumes Jest tests
+      run: |
+        npm install
+        npm test
   deploy:
     needs: [build-test-backend, build-test-frontend]  # Only if tests pass
     if: github.ref == 'refs/heads/main'  # Only on main pushes
@@ -41,22 +46,29 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_BACKEND_REPO }}
-        IMAGE_TAG: ${{ github.sha }}  # Version with commit hash
+        IMAGE_TAG: ${{ github.sha }}
       run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG /app
+        # Tag and push current image
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG backend/
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        # Tag previous image (if exists, move latest to previous)
+        aws ecr describe-images --repository-name vw-backend --query 'imageIds[?imageTags[0]==`latest`]' --output text | awk '{print $1}' | xargs -I {} aws ecr tag --repository-name vw-backend --image-id {} --tags "previous"
+        aws ecr push $ECR_REGISTRY/$ECR_REPOSITORY:previous
+
     - name: Build, Tag, Push Frontend
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.ECR_FRONTEND_REPO }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG /
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG frontend/
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        aws ecr describe-images --repository-name vw-frontend --query 'imageIds[?imageTags[0]==`latest`]' --output text | awk '{print $1}' | xargs -I {} aws ecr tag --repository-name vw-frontend --image-id {} --tags "previous"
+        aws ecr push $ECR_REGISTRY/$ECR_REPOSITORY:previous
     - name: Update ECS Backend
       run: |
         aws ecs update-service --cluster ${{ secrets.ECS_CLUSTER }} --service ${{ secrets.ECS_BACKEND_SERVICE }} --force-new-deployment
