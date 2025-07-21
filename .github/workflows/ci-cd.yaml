@@ -28,6 +28,13 @@ jobs:
       run: |
         npm install
         npm test
+    - name: Run E2E Tests
+      run: |
+        cd frontend
+        npm install
+        docker run -d -p 80:80 vw-frontend
+        npx playwright test
+        docker stop $(docker ps -q)
   deploy:
     needs: [build-test-backend, build-test-frontend]  # Only if tests pass
     if: github.ref == 'refs/heads/main'  # Only on main pushes

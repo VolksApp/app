@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import App from './App.jsx';
 
 describe('App', () => {
-  it('renders without crashing', () => {
+  it('renders navbar', () => {
     render(<App />);
-    expect(true).toBe(true);  // Placeholder
+    expect(screen.getByText('Catálogo VW')).toBeInTheDocument();
   });
 });

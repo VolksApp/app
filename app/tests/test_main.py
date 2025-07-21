@@ -1,2 +1,7 @@
 def test_health():
-    assert True  # Placeholder; later, test real API
+    from main import app  # Import app for testing
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "healthy"}
