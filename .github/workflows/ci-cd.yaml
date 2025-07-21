@@ -1,0 +1,61 @@
+name: CI/CD Pipeline
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly Sundays
+jobs:
+  build-test-backend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build Docker
+      run: docker build -t vw-backend ./backend
+    - name: Run Tests
+      run: docker run vw-backend pytest  # Assumes tests in backend/tests/
+  build-test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build Docker
+      run: docker build -t vw-frontend ./frontend
+    - name: Run Tests
+      run: docker run vw-frontend npm test  # Assumes Jest tests
+  deploy:
+    needs: [build-test-backend, build-test-frontend]  # Only if tests pass
+    if: github.ref == 'refs/heads/main'  # Only on main pushes
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    - name: Login to ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    - name: Build, Tag, Push Backend
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ secrets.ECR_BACKEND_REPO }}
+        IMAGE_TAG: ${{ github.sha }}  # Version with commit hash
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+    - name: Build, Tag, Push Frontend
+      # Similar to above, but for frontend
+    - name: Update ECS Backend
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: |  # Inline or from file; update image to new tag
+          # Reference your task def JSON, update container image
+        cluster: ${{ secrets.ECS_CLUSTER }}
+        service: ${{ secrets.ECS_BACKEND_SERVICE }}
+        wait-for-service-stability: true
+    - name: Update ECS Frontend
+      # Similar for frontend

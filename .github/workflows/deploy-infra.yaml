@@ -1,0 +1,18 @@
+name: Deploy Infrastructure
+on:
+  push:
+    branches: [main]
+    paths: ['infra.yaml']
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    - name: Deploy CloudFormation
+      run: |
+        aws cloudformation deploy --template-file infra_v2.yaml --stack-name vw-stack --capabilities CAPABILITY_IAM
