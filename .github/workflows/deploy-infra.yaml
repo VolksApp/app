@@ -2,7 +2,7 @@ name: Deploy Infrastructure
 on:
   push:
     branches: [main]
-    paths: ['infra.yaml']
+    paths: ['infra_v2.yaml']
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,4 +15,4 @@ jobs:
         aws-region: ${{ secrets.AWS_REGION }}
     - name: Deploy CloudFormation
       run: |
-        aws cloudformation deploy --template-file infra_v2.yaml --stack-name vw-stack --capabilities CAPABILITY_IAM
+        aws cloudformation deploy --template-file infra_v2.yaml --stack-name vw-stack --capabilities CAPABILITY_IAM --no-fail-on-empty-changeset
